@@ -1,0 +1,30 @@
+<h1>Admin Panel</h1>
+
+<table border="1">
+
+<tr>
+    <th>ID</th>
+    <th>User</th>
+    <th>Role</th>
+    <th>Status</th>
+    <th>Attempts</th>
+    <th>Action</th>
+</tr>
+
+{% for user in users %}
+<tr>
+    <td>{{ user[0] }}</td>
+    <td>{{ user[1] }}</td>
+    <td>{{ user[2] }}</td>
+    <td>{{ user[3] }}</td>
+    <td>{{ user[4] }}</td>
+
+    <td>
+        <a href="/approve/{{ user[0] }}">Approve</a> |
+        <a href="/block/{{ user[0] }}">Block</a> |
+        <a href="/unlock/{{ user[0] }}">Unlock</a>
+    </td>
+</tr>
+{% endfor %}
+
+</table>

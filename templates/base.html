@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NetSentinel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+<div class="sidebar">
+    <h2 class="logo">NETSENTINEL</h2>
+
+    <a href="/dashboard">📊 Dashboard</a>
+    <a href="/cctv">📷 CCTV Monitor</a>
+    <a href="/logs">📜 My Logs</a>
+
+    {% if session["role"] == "Admin" %}
+    <a href="/admin">🛡 Admin Panel</a>
+    <a href="/alllogs">📡 All Logs</a>
+    {% endif %}
+
+    <a href="/logout" class="logout">🚪 Logout</a>
+</div>
+
+<div class="main">
+    <div class="topbar">
+        Welcome, {{ session["user"] }} | Role: {{ session["role"] }}
+    </div>
+
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+</div>
+
+</body>
+</html>

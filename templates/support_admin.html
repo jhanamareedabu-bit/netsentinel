@@ -1,0 +1,33 @@
+<h1>
+
+Support Requests
+
+</h1>
+
+<table border="1">
+
+<tr>
+
+<th>User</th>
+
+<th>Message</th>
+
+<th>Status</th>
+
+</tr>
+
+{% for s in requests %}
+
+<tr>
+
+<td>{{s[0]}}</td>
+
+<td>{{s[1]}}</td>
+
+<td>{{s[2]}}</td>
+
+</tr>
+
+{% endfor %}
+
+</table>

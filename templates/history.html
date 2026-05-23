@@ -1,0 +1,22 @@
+<h1>CCTV History</h1>
+
+<a href="/dashboard">
+Dashboard
+</a>
+
+<hr>
+
+{% for image in images %}
+
+<div>
+
+<img
+src="/snapshots/{{image}}"
+width="300"
+>
+
+<p>{{image}}</p>
+
+</div>
+
+{% endfor %}

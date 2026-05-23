@@ -1,0 +1,77 @@
+body {
+    margin: 0;
+    font-family: 'Orbitron', sans-serif;
+    background: #0b1220;
+    color: #e5e7eb;
+}
+
+/* SIDEBAR */
+.sidebar {
+    width: 240px;
+    height: 100vh;
+    position: fixed;
+    background: #0f172a;
+    padding: 20px;
+    border-right: 1px solid #1f2937;
+}
+
+.logo {
+    color: #38bdf8;
+    margin-bottom: 30px;
+}
+
+.sidebar a {
+    display: block;
+    color: #cbd5e1;
+    padding: 12px;
+    text-decoration: none;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    transition: 0.3s;
+}
+
+.sidebar a:hover {
+    background: #1e293b;
+    color: #38bdf8;
+}
+
+.logout {
+    color: #ef4444 !important;
+}
+
+/* MAIN */
+.main {
+    margin-left: 260px;
+    padding: 20px;
+}
+
+.topbar {
+    background: #111827;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+/* CARDS */
+.card {
+    background: #111827;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #1f2937;
+}
+
+.status-active {
+    color: #22c55e;
+}
+
+.status-locked {
+    color: #ef4444;
+}
+
+/* CCTV */
+.cctv-box img {
+    width: 100%;
+    border-radius: 12px;
+    border: 2px solid #38bdf8;
+}

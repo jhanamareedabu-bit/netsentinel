@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NetSentinel Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="sidebar">
+        <h2>NETSENTINEL</h2>
+
+        <a href="/dashboard">Dashboard</a>
+        <a href="/cctv">CCTV Monitor</a>
+        <a href="/logs">My Logs</a>
+
+        {% if session.get('role') == 'Admin' %}
+            <a href="/admin">Admin Panel</a>
+            <a href="/alllogs">System Logs</a>
+        {% endif %}
+
+        <a href="/logout">Logout</a>
+    </div>
+
+    <div class="main">
+
+        <div class="card">
+            <h3>Welcome {{ session.get('user') }}</h3>
+            <p>Status: <b>ACTIVE</b></p>
+        </div>
+
+        <div class="card">
+            <h3>Live CCTV Feed</h3>
+            <img src="/video_feed" width="100%">
+        </div>
+
+        <div class="card">
+            <h3>Recent Activity</h3>
+
+            {% for log in logs %}
+                <div class="log">
+                    <b>{{ log[0] }}</b><br>
+                    <small>{{ log[1] }}</small>
+                </div>
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

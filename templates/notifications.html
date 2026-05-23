@@ -1,0 +1,33 @@
+<h1>
+
+Admin Notifications
+
+</h1>
+
+<table border="1">
+
+<tr>
+
+<th>User</th>
+
+<th>Message</th>
+
+<th>Time</th>
+
+</tr>
+
+{% for n in data %}
+
+<tr>
+
+<td>{{n[0]}}</td>
+
+<td>{{n[1]}}</td>
+
+<td>{{n[2]}}</td>
+
+</tr>
+
+{% endfor %}
+
+</table>

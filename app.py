@@ -1,17 +1,893 @@
-from flask import Flask
+from flask import Flask, render_template, request, redirect, session, Response
+from database import get_conn
+from camera import (
+generate_frames,
+save_snapshot,
+start_recording,
+stop_recording
+)
 
-app=Flask(__name__)
+from flask import send_from_directory
+from datetime import timedelta
+import os
+import socket
+import uuid
 
-@app.route("/")
+app = Flask(__name__)
+app.secret_key = "secret123"
 
-def home():
+app.permanent_session_lifetime=timedelta(
+minutes=15
+)
 
-    return """
-    NETSENTINEL RUNNING
+
+# ======================
+# LOGIN
+# ======================
+@app.route("/", methods=["GET", "POST"])
+def login():
+
+    if request.method == "POST":
+
+        username = request.form["username"]
+        password = request.form["password"]
+
+        conn = get_conn()
+        cur = conn.cursor()
+
+        try:
+            cur.execute("""
+                SELECT user_id, username, password_hash, status, failed_attempts, role, approval_status
+                FROM Users
+                WHERE username=%s
+            """, (username,))
+
+            user = cur.fetchone()
+
+            if not user:
+                cur.execute("""
+                    INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
+                    VALUES (%s, %s, %s, %s)
+                """, (None, f"FAILED LOGIN - unknown user: {username}", request.remote_addr, "SYSTEM"))
+
+                conn.commit()
+                return "User not found"
+
+            user_id, uname, db_pass, status, attempts, role, approval_status = user
+
+            if approval_status != "Approved":
+                return "Account waiting for Admin approval."
+
+            if status == "Locked":
+                return redirect(
+                    "/support"
+                )
+
+            if password == db_pass:
+                device_name = socket.gethostname()
+
+                mac = uuid.getnode()
+
+                mac = ':'.join(
+
+                    [
+                        '%012X' % mac
+                    ][0][i:i + 2]
+
+                    for i in range(
+                        0,
+                        12,
+                        2
+                    )
+
+                )
+
+                cur.execute("""
+                
+
+                            INSERT INTO Devices(device_name,
+                                                ip_address,
+                                                mac_address,
+                                                user_id)
+
+                            VALUES (%s,
+                                    %s,
+                                    %s,
+                                    %s)
+
+                            """, (
+
+                                device_name,
+                                request.remote_addr,
+                                mac,
+                                user_id
+
+                            ))
+
+                cur.execute("""
+                    UPDATE Users
+                    SET failed_attempts = 0
+                    WHERE user_id = %s
+                """, (user_id,))
+
+                cur.execute("""
+                    INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
+                    VALUES (%s, %s, %s, %s)
+                """, (user_id, "LOGIN SUCCESS", request.remote_addr, "AUTH"))
+
+                cur.execute("""
+
+                            SELECT last_login_ip
+
+                            FROM Users
+
+                            WHERE user_id = %s
+
+                            """, (user_id,))
+
+                old_ip = cur.fetchone()[0]
+
+                if old_ip and old_ip != request.remote_addr:
+                    cur.execute("""
+
+                                INSERT INTO Notifications(user_id,
+                                                          message)
+
+                                VALUES (%s,
+                                        %s)
+
+                                """, (
+
+                                    user_id,
+
+                                    "Suspicious Login New IP"
+
+                                ))
+
+                    cur.execute("""
+
+                                UPDATE Users
+
+                                SET last_login_ip=%s,
+
+                                    last_login_time=NOW()
+
+                                WHERE user_id = %s
+
+                                """, (
+
+                                    request.remote_addr,
+                                    user_id
+
+                                ))
+
+
+                conn.commit()
+
+                session.permanent = True
+
+                session["user_id"] = user_id
+                session["user"] = username
+                session["role"] = role
+
+                return redirect("/dashboard")
+
+            else:
+
+                attempts += 1
+                status_update = "Locked" if attempts >= 3 else "Active"
+
+                cur.execute("""
+                    UPDATE Users
+                    SET failed_attempts = %s,
+                        status = %s
+                    WHERE user_id = %s
+                """, (attempts, status_update, user_id))
+
+                cur.execute("""
+                    INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
+                    VALUES (%s, %s, %s, %s)
+                """, (user_id, f"LOGIN FAILED attempt {attempts}", request.remote_addr, "AUTH"))
+
+                conn.commit()
+
+                return f"Wrong password. Attempt {attempts}/3"
+
+        finally:
+            cur.close()
+            conn.close()
+
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+
+    conn=get_conn()
+    cur=conn.cursor()
+
+    if session.get("user_id"):
+
+        cur.execute("""
+
+        INSERT INTO ActivityLogs(
+
+        user_id,
+
+        action_description,
+
+        ip_address,
+
+        log_type
+
+        )
+
+        VALUES(
+
+        %s,
+
+        %s,
+
+        %s,
+
+        %s
+
+        )
+
+        """,(
+
+        session["user_id"],
+
+        "LOGOUT",
+
+        request.remote_addr,
+
+        "AUTH"
+
+        ))
+
+        conn.commit()
+
+    cur.close()
+    conn.close()
+
+    session.clear()
+
+    return redirect("/")
+
+# ======================
+# DASHBOARD (USER ONLY LOGS)
+# ======================
+@app.route("/dashboard")
+def dashboard():
+
+    if "user" not in session:
+        return redirect("/")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    # ======================
+    # ADMIN DASHBOARD LOGS
+    # ======================
+    if session["role"] == "Admin":
+
+        cur.execute("""
+            SELECT
+                COALESCE(Users.username,'SYSTEM'),
+                action_description,
+                timestamp
+            FROM ActivityLogs
+            LEFT JOIN Users
+            ON Users.user_id=ActivityLogs.user_id
+            ORDER BY timestamp DESC
+            LIMIT 10
+        """)
+
+        logs = cur.fetchall()
+
+        # KPIs (ADMIN ONLY OPTIONAL)
+        cur.execute("SELECT COUNT(*) FROM Users")
+        users = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM ActivityLogs")
+        total_logs = cur.fetchone()[0]
+
+    # ======================
+    # USER DASHBOARD LOGS
+    # ======================
+    else:
+
+        cur.execute("""
+            SELECT
+                action_description,
+                timestamp
+            FROM ActivityLogs
+            WHERE user_id=%s
+            ORDER BY timestamp DESC
+            LIMIT 10
+        """, (session["user_id"],))
+
+        logs = cur.fetchall()
+
+        # KPIs (USER ONLY OPTIONAL)
+        cur.execute("SELECT COUNT(*) FROM ActivityLogs WHERE user_id=%s",
+                    (session["user_id"],))
+        total_logs = cur.fetchone()[0]
+
+        users = None  # optional placeholder
+
+    cur.close()
+    conn.close()
+
+    camera_status = "ONLINE"
+
+    return render_template(
+        "dashboard.html",
+        logs=logs,
+        role=session["role"],
+        camera_status=camera_status,
+        total_logs=total_logs,
+        users=users
+    )
+
+@app.route("/alllogs")
+def alllogs():
+
+    if session.get("role")!="Admin":
+        return "Access Denied"
+
+    conn=get_conn()
+    cur=conn.cursor()
+
+    cur.execute("""
+
+        SELECT
+            COALESCE(Users.username,'SYSTEM'),
+            action_description,
+            ip_address,
+            log_type,
+            timestamp
+
+        FROM ActivityLogs
+
+        LEFT JOIN Users
+        ON Users.user_id=ActivityLogs.user_id
+
+        ORDER BY timestamp DESC
+
+    """)
+
+    logs=cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "alllogs.html",
+        logs=logs
+    )
+
+
+# ======================
+# USER FULL LOGS (ONLY OWN)
+# ======================
+@app.route("/logs")
+def logs():
+
+    if "user" not in session:
+        return redirect("/")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    user_id = session["user_id"]
+
+    cur.execute("""
+        SELECT action_description, ip_address, log_type, timestamp
+        FROM ActivityLogs
+        WHERE user_id = %s
+        ORDER BY timestamp DESC
+    """, (user_id,))
+
+    data = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template("logs.html", logs=data)
+
+# ======================
+# ADMIN PANEL (GLOBAL LOGS)
+# ======================
+@app.route("/admin")
+def admin():
+
+    if session.get("role")!="Admin":
+        return "Access Denied"
+
+    conn=get_conn()
+    cur=conn.cursor()
+
+    cur.execute("""
+
+        SELECT
+        user_id,
+        username,
+        role,
+        status,
+        approval_status,
+        failed_attempts
+
+        FROM Users
+
+        ORDER BY user_id
+
+    """)
+
+    users=cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "admin.html",
+        users=users
+    )
+
+# ======================
+# APPROVE USER
+# ======================
+@app.route("/approve/<int:user_id>")
+def approve(user_id):
+
+    if session.get("role") != "Admin":
+        return "Access Denied"
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE Users
+        SET approval_status='Approved'
+        WHERE user_id=%s
+    """, (user_id,))
+
+    cur.execute("""
+        INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
+        VALUES (%s, %s, %s, %s)
+    """, (user_id, "ACCOUNT APPROVED", request.remote_addr, "ADMIN"))
+
+    conn.commit()
+
+    cur.close()
+    conn.close()
+
+    return redirect("/admin")
+
+
+# ======================
+# BLOCK USER
+# ======================
+@app.route("/block/<int:user_id>")
+def block(user_id):
+
+    if session.get("role") != "Admin":
+        return "Access Denied"
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE Users
+        SET status='Locked'
+        WHERE user_id=%s
+    """, (user_id,))
+
+    cur.execute("""
+        INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
+        VALUES (%s, %s, %s, %s)
+    """, (user_id, "ACCOUNT BLOCKED BY ADMIN", request.remote_addr, "ADMIN"))
+
+    conn.commit()
+
+    cur.close()
+    conn.close()
+
+    return redirect("/admin")
+
+
+# ======================
+# UNLOCK USER
+# ======================
+@app.route("/unlock/<int:user_id>")
+def unlock(user_id):
+
+    if session.get("role") != "Admin":
+        return "Access Denied"
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE Users
+        SET status='Active',
+            failed_attempts=0
+        WHERE user_id=%s
+    """, (user_id,))
+
+    cur.execute("""
+        INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
+        VALUES (%s, %s, %s, %s)
+    """, (user_id, "ACCOUNT UNLOCKED BY ADMIN", request.remote_addr, "ADMIN"))
+
+    conn.commit()
+
+    cur.close()
+    conn.close()
+
+    return redirect("/admin")
+
+@app.route("/notifications")
+def notifications():
+
+    if session.get("role")!="Admin":
+        return "Access Denied"
+
+    conn=get_conn()
+    cur=conn.cursor()
+
+    cur.execute("""
+
+    SELECT
+
+    Users.username,
+    Notifications.message,
+    Notifications.created_at
+
+    FROM Notifications
+
+    JOIN Users
+
+    ON Users.user_id=
+    Notifications.user_id
+
+    ORDER BY created_at DESC
+
+    """)
+
+    data=cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+
+    "notifications.html",
+
+    data=data
+
+    )
+
+# ======================
+# CCTV PAGE
+# ======================
+@app.route("/cctv")
+def cctv():
+
+    if "user" not in session:
+        return redirect("/")
+
+    return render_template("cctv.html")
+
+
+# ======================
+# VIDEO FEED
+# ======================
+@app.route("/video_feed")
+def video_feed():
+
+    return Response(
+        generate_frames(),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
+
+@app.route("/snapshot")
+def snapshot():
+
+    if "user" not in session:
+        return redirect("/")
+
+    filename=save_snapshot()
+
+    conn=get_conn()
+    cur=conn.cursor()
+
+    cur.execute("""
+
+        INSERT INTO ActivityLogs(
+            user_id,
+            action_description,
+            ip_address,
+            log_type
+        )
+
+        VALUES(
+            %s,
+            %s,
+            %s,
+            %s
+        )
+
+    """,(
+
+        session["user_id"],
+        f"SNAPSHOT SAVED {filename}",
+        request.remote_addr,
+        "CAMERA"
+
+    ))
+
+    conn.commit()
+
+    cur.close()
+    conn.close()
+
+    return f"""
+    Snapshot Saved
+
+    File:
+
+    {filename}
+
+    <a href='/history'>
+    Open History
+    </a>
+
+    <br>
+
+    <a href='/cctv'>
+    Back CCTV
+    </a>
     """
 
-if __name__=="__main__":
+@app.route("/snapshots/<filename>")
+def snapshots(filename):
 
-    app.run(
-        debug=True
+    return send_from_directory(
+        "snapshots",
+        filename
     )
+
+
+@app.route("/history")
+def history():
+
+    if "user" not in session:
+        return redirect("/")
+
+    files=os.listdir(
+        "snapshots"
+    )
+
+    files.sort(
+        reverse=True
+    )
+
+    return render_template(
+        "history.html",
+        images=files
+    )
+
+@app.route("/record/start")
+def record_start():
+
+    if session.get(
+    "role"
+    )!="Admin":
+
+        return "Denied"
+
+    start_recording()
+
+    return redirect(
+    "/cctv"
+    )
+
+
+@app.route("/record/stop")
+def record_stop():
+
+    if session.get(
+    "role"
+    )!="Admin":
+
+        return "Denied"
+
+    stop_recording()
+
+    return redirect(
+    "/cctv"
+    )
+
+@app.route("/forgot",methods=["GET","POST"])
+def forgot():
+
+    if request.method=="POST":
+
+        username=request.form["username"]
+
+        conn=get_conn()
+        cur=conn.cursor()
+
+        cur.execute("""
+
+        UPDATE Users
+
+        SET reset_requested=TRUE
+
+        WHERE username=%s
+
+        """,(username,))
+
+        cur.execute("""
+
+        SELECT user_id
+
+        FROM Users
+
+        WHERE username=%s
+
+        """,(username,))
+
+        user=cur.fetchone()
+
+        if user:
+
+            cur.execute("""
+
+            INSERT INTO Notifications(
+
+            user_id,
+            message
+
+            )
+
+            VALUES(
+
+            %s,
+            %s
+
+            )
+
+            """,(
+
+            user[0],
+            "Password reset requested"
+
+            ))
+
+        conn.commit()
+
+        cur.close()
+        conn.close()
+
+        return """
+        Request Sent
+
+        Wait Admin Approval
+        """
+
+    return render_template(
+    "forgot.html"
+    )
+
+@app.route(
+"/support",
+methods=["GET","POST"]
+)
+
+def support():
+
+    if request.method=="POST":
+
+        message=request.form["message"]
+
+        conn=get_conn()
+        cur=conn.cursor()
+
+        cur.execute("""
+
+        INSERT INTO SupportRequests(
+
+        user_id,
+        message
+
+        )
+
+        VALUES(
+
+        %s,
+        %s
+
+        )
+
+        """,(
+
+        session.get(
+        "user_id"
+        ),
+
+        message
+
+        ))
+
+        conn.commit()
+
+        cur.close()
+        conn.close()
+
+        return """
+
+        Request Sent
+
+        """
+
+    return render_template(
+    "support.html"
+    )
+
+@app.route(
+"/supportadmin"
+)
+
+def supportadmin():
+
+    if session.get(
+    "role"
+    )!="Admin":
+
+        return "Denied"
+
+    conn=get_conn()
+    cur=conn.cursor()
+
+    cur.execute("""
+
+    SELECT
+
+    Users.username,
+
+    SupportRequests.message,
+
+    SupportRequests.status
+
+    FROM SupportRequests
+
+    LEFT JOIN Users
+
+    ON Users.user_id=
+    SupportRequests.user_id
+
+    ORDER BY
+    created_at DESC
+
+    """)
+
+    data=cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+
+    "support_admin.html",
+
+    requests=data
+
+    )
+
+# ======================
+# RUN APP
+# ======================
+if __name__ == "__main__":
+    app.run(debug=True)
