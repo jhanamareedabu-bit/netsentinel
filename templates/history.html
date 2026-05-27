@@ -1,10 +1,14 @@
-<h1>CCTV History</h1>
+{% extends "base.html" %}
 
-<a href="/dashboard">
-Dashboard
-</a>
+{% block content %}
 
-<hr>
+<div class="card">
+
+<div class="title">
+
+Snapshot History
+
+</div>
 
 {% for image in images %}
 
@@ -15,8 +19,18 @@ src="/snapshots/{{image}}"
 width="300"
 >
 
-<p>{{image}}</p>
+<p>
+
+{{image}}
+
+</p>
 
 </div>
 
+<hr>
+
 {% endfor %}
+
+</div>
+
+{% endblock %}

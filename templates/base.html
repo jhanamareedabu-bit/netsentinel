@@ -2,35 +2,44 @@
 <html>
 <head>
     <title>NetSentinel</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 
 <body>
 
-<div class="sidebar">
-    <h2 class="logo">NETSENTINEL</h2>
+<div class="container">
 
-    <a href="/dashboard">📊 Dashboard</a>
-    <a href="/cctv">📷 CCTV Monitor</a>
-    <a href="/logs">📜 My Logs</a>
+    <!-- SIDEBAR -->
+    <div class="sidebar">
 
-    {% if session["role"] == "Admin" %}
-    <a href="/admin">🛡 Admin Panel</a>
-    <a href="/alllogs">📡 All Logs</a>
-    {% endif %}
+        <h2>NETSENTINEL</h2>
 
-    <a href="/logout" class="logout">🚪 Logout</a>
-</div>
+        <a href="/dashboard">Dashboard</a>
+        {% if session['role']=="Admin" %}
+        <a href="/cctv">CCTV Monitor</a>
+        {% endif %}
+        <a href="/logs">My Logs</a>
 
-<div class="main">
-    <div class="topbar">
-        Welcome, {{ session["user"] }} | Role: {{ session["role"] }}
+        {% if session['role'] == 'Admin' %}
+            <a href="/admin">Admin Panel</a>
+            <a href="/alllogs">System Logs</a>
+            <a href="/notifications">Notifications</a>
+        {% endif %}
+
+        <a href="/logout">Logout</a>
+
+        <a href="/password_resets">Password Reset Requests</a>
+
     </div>
 
-    <div class="content">
-        {% block content %}{% endblock %}
+    <!-- MAIN CONTENT AREA -->
+    <div class="main">
+
+        {% block content %}
+        {% endblock %}
+
     </div>
+
 </div>
 
 </body>

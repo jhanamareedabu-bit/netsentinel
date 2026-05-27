@@ -1,33 +1,50 @@
-<h1>
+{% extends "base.html" %}
 
-Admin Notifications
+{% block content %}
 
-</h1>
+<div class="card">
 
-<table border="1">
+    <div class="title">
+        Security Notifications
+    </div>
 
-<tr>
+    <table>
 
-<th>User</th>
+        <tr>
+            <th>User</th>
+            <th>Notification</th>
+            <th>Timestamp</th>
+        </tr>
 
-<th>Message</th>
+        {% for n in data %}
 
-<th>Time</th>
+        <tr>
 
-</tr>
+            <td>{{ n[0] }}</td>
 
-{% for n in data %}
+            <td>
 
-<tr>
+                {% if "Suspicious" in n[1] %}
+                    ⚠️ {{ n[1] }}
 
-<td>{{n[0]}}</td>
+                {% elif "Password reset" in n[1] %}
+                    🔐 {{ n[1] }}
 
-<td>{{n[1]}}</td>
+                {% else %}
+                    {{ n[1] }}
 
-<td>{{n[2]}}</td>
+                {% endif %}
 
-</tr>
+            </td>
 
-{% endfor %}
+            <td>{{ n[2] }}</td>
 
-</table>
+        </tr>
+
+        {% endfor %}
+
+    </table>
+
+</div>
+
+{% endblock %}

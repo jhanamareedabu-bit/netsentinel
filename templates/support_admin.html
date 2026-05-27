@@ -1,16 +1,22 @@
-<h1>
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="card">
+
+<div class="title">
 
 Support Requests
 
-</h1>
+</div>
 
-<table border="1">
+<table>
 
 <tr>
 
 <th>User</th>
 
-<th>Message</th>
+<th>Issue</th>
 
 <th>Status</th>
 
@@ -20,14 +26,42 @@ Support Requests
 
 <tr>
 
-<td>{{s[0]}}</td>
+<td>
 
-<td>{{s[1]}}</td>
+{{ s[0] }}
 
-<td>{{s[2]}}</td>
+</td>
+
+<td>
+
+{{ s[1] }}
+
+</td>
+
+<td>
+
+{% if s[2]=="Pending" %}
+
+🟡 Pending
+
+{% elif s[2]=="Resolved" %}
+
+🟢 Resolved
+
+{% else %}
+
+{{ s[2] }}
+
+{% endif %}
+
+</td>
 
 </tr>
 
 {% endfor %}
 
 </table>
+
+</div>
+
+{% endblock %}

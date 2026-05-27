@@ -1,40 +1,64 @@
 import cv2
 import os
+import time
 from datetime import datetime
 
 
-recording=False
+recording = False
+video_writer = None
 
-video_writer=None
+RECORD_FOLDER="recordings"
+
+os.makedirs(
+RECORD_FOLDER,
+exist_ok=True
+)
+
+# CAMERA INIT
+camera = cv2.VideoCapture(0)
+
+# fallback kapag ayaw default
+if not camera.isOpened():
+
+    camera = cv2.VideoCapture(
+        0,
+        cv2.CAP_MSMF
+    )
+
+
+SNAP_FOLDER = "snapshots"
+
+if not os.path.exists(SNAP_FOLDER):
+    os.makedirs(SNAP_FOLDER)
+
 
 def start_recording():
 
     global recording
     global video_writer
 
-    filename=time.strftime(
+    filename = os.path.join(
 
-    "record_%Y%m%d_%H%M%S.mp4"
+        RECORD_FOLDER,
 
-    )
+        time.strftime(
 
-    fourcc=cv2.VideoWriter_fourcc(
-    *'mp4v'
-    )
+            "record_%Y%m%d_%H%M%S.avi"
 
-    video_writer=cv2.VideoWriter(
-
-    filename,
-
-    fourcc,
-
-    20,
-
-    (640,480)
+        )
 
     )
 
-    recording=True
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+
+    video_writer = cv2.VideoWriter(
+        filename,
+        fourcc,
+        20,
+        (640, 480)
+    )
+
+    recording = True
 
 
 def stop_recording():
@@ -42,63 +66,73 @@ def stop_recording():
     global recording
     global video_writer
 
-    recording=False
+    recording = False
 
     if video_writer:
 
         video_writer.release()
-
-camera=cv2.VideoCapture(0)
-
-SNAP_FOLDER="snapshots"
-
-if not os.path.exists(SNAP_FOLDER):
-    os.makedirs(SNAP_FOLDER)
+        video_writer = None
 
 
 def generate_frames():
 
+    global recording
+
     while True:
 
-        success,frame=camera.read()
+        if not camera.isOpened():
+            continue
 
-        if recording:
+        success, frame = camera.read()
+
+        if not success:
+            continue
+
+        if recording and video_writer:
+
             video_writer.write(
                 frame
             )
 
-        if not success:
-            break
+        ret, buffer = cv2.imencode(
+            ".jpg",
+            frame
+        )
 
-        ret,buffer=cv2.imencode(".jpg",frame)
+        if not ret:
+            continue
 
-        frame_bytes=buffer.tobytes()
+        frame_bytes = buffer.tobytes()
 
-        yield(
+        yield (
+
             b'--frame\r\n'
             b'Content-Type:image/jpeg\r\n\r\n'
-            +frame_bytes+
+            + frame_bytes +
             b'\r\n'
+
         )
 
 
 def save_snapshot():
 
-    success,frame=camera.read()
+    success, frame = camera.read()
 
-    if success:
+    if not success:
+        return None
 
-        filename=datetime.now().strftime(
-            "%Y%m%d_%H%M%S.jpg"
-        )
+    filename = datetime.now().strftime(
+        "%Y%m%d_%H%M%S.jpg"
+    )
 
-        path=os.path.join(
-            SNAP_FOLDER,
-            filename
-        )
+    path = os.path.join(
+        SNAP_FOLDER,
+        filename
+    )
 
-        cv2.imwrite(path,frame)
+    cv2.imwrite(
+        path,
+        frame
+    )
 
-        return filename
-
-    return None
+    return filename

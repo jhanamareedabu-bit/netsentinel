@@ -6,6 +6,7 @@ save_snapshot,
 start_recording,
 stop_recording
 )
+from flask import redirect, url_for
 
 from flask import send_from_directory
 from datetime import timedelta
@@ -20,10 +21,9 @@ app.permanent_session_lifetime=timedelta(
 minutes=15
 )
 
+print("RUNNING FILE:", __file__)
 
-# ======================
 # LOGIN
-# ======================
 @app.route("/", methods=["GET", "POST"])
 def login():
 
@@ -254,9 +254,80 @@ def logout():
 
     return redirect("/")
 
-# ======================
-# DASHBOARD (USER ONLY LOGS)
-# ======================
+@app.route("/register", methods=["GET","POST"])
+def register():
+
+    if request.method=="POST":
+
+        username=request.form["username"]
+        fullname=request.form["fullname"]
+        password=request.form["password"]
+
+        conn=get_conn()
+        cur=conn.cursor()
+
+        try:
+
+            cur.execute("""
+
+            INSERT INTO Users(
+
+            username,
+            full_name,
+            password_hash,
+            role,
+            status,
+            approval_status,
+            failed_attempts
+
+            )
+
+            VALUES(
+
+            %s,
+            %s,
+            %s,
+            'User',
+            'Active',
+            'Pending',
+            0
+
+            )
+
+            """,(
+
+            username,
+            fullname,
+            password
+
+            ))
+
+            conn.commit()
+
+            return """
+
+            Account Created
+
+            Wait Admin Approval
+
+            <br><br>
+
+            <a href='/'>
+            Login
+            </a>
+
+            """
+
+        finally:
+
+            cur.close()
+            conn.close()
+
+    return render_template(
+    "register.html"
+    )
+
+# DASHBOARD USER ONLy
 @app.route("/dashboard")
 def dashboard():
 
@@ -266,9 +337,8 @@ def dashboard():
     conn = get_conn()
     cur = conn.cursor()
 
-    # ======================
     # ADMIN DASHBOARD LOGS
-    # ======================
+
     if session["role"] == "Admin":
 
         cur.execute("""
@@ -285,16 +355,15 @@ def dashboard():
 
         logs = cur.fetchall()
 
-        # KPIs (ADMIN ONLY OPTIONAL)
+        # KPIs ADMIN ONLY
         cur.execute("SELECT COUNT(*) FROM Users")
         users = cur.fetchone()[0]
 
         cur.execute("SELECT COUNT(*) FROM ActivityLogs")
         total_logs = cur.fetchone()[0]
 
-    # ======================
     # USER DASHBOARD LOGS
-    # ======================
+
     else:
 
         cur.execute("""
@@ -309,12 +378,12 @@ def dashboard():
 
         logs = cur.fetchall()
 
-        # KPIs (USER ONLY OPTIONAL)
+        # KPIs USER ONLY
         cur.execute("SELECT COUNT(*) FROM ActivityLogs WHERE user_id=%s",
                     (session["user_id"],))
         total_logs = cur.fetchone()[0]
 
-        users = None  # optional placeholder
+        users = None
 
     cur.close()
     conn.close()
@@ -328,6 +397,45 @@ def dashboard():
         camera_status=camera_status,
         total_logs=total_logs,
         users=users
+    )
+
+@app.route("/admin/dashboard")
+def admin_dashboard():
+
+    if session.get("role") != "Admin":
+        return "Denied"
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    # USERS
+    cur.execute("SELECT COUNT(*) FROM Users")
+    total_users = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM Users WHERE status='Active'")
+    active_users = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM Users WHERE status='Locked'")
+    locked_users = cur.fetchone()[0]
+
+    # REQUESTS
+    cur.execute("SELECT COUNT(*) FROM Requests WHERE status='PENDING'")
+    pending_requests = cur.fetchone()[0]
+
+    # LOGS
+    cur.execute("SELECT COUNT(*) FROM ActivityLogs WHERE log_type='AUTH'")
+    auth_logs = cur.fetchone()[0]
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "admin_dashboard.html",
+        total_users=total_users,
+        active_users=active_users,
+        locked_users=locked_users,
+        pending_requests=pending_requests,
+        auth_logs=auth_logs
     )
 
 @app.route("/alllogs")
@@ -367,10 +475,7 @@ def alllogs():
         logs=logs
     )
 
-
-# ======================
-# USER FULL LOGS (ONLY OWN)
-# ======================
+# USER FULL LOGS
 @app.route("/logs")
 def logs():
 
@@ -396,9 +501,7 @@ def logs():
 
     return render_template("logs.html", logs=data)
 
-# ======================
-# ADMIN PANEL (GLOBAL LOGS)
-# ======================
+# ADMIN PANEL
 @app.route("/admin")
 def admin():
 
@@ -434,9 +537,7 @@ def admin():
         users=users
     )
 
-# ======================
 # APPROVE USER
-# ======================
 @app.route("/approve/<int:user_id>")
 def approve(user_id):
 
@@ -464,10 +565,7 @@ def approve(user_id):
 
     return redirect("/admin")
 
-
-# ======================
 # BLOCK USER
-# ======================
 @app.route("/block/<int:user_id>")
 def block(user_id):
 
@@ -495,10 +593,7 @@ def block(user_id):
 
     return redirect("/admin")
 
-
-# ======================
 # UNLOCK USER
-# ======================
 @app.route("/unlock/<int:user_id>")
 def unlock(user_id):
 
@@ -568,21 +663,36 @@ def notifications():
 
     )
 
-# ======================
 # CCTV PAGE
-# ======================
 @app.route("/cctv")
 def cctv():
 
     if "user" not in session:
         return redirect("/")
 
-    return render_template("cctv.html")
+    base_dir = app.root_path
 
+    images_path = os.path.join(base_dir, "snapshots")
+    recordings_path = os.path.join(base_dir, "recordings")
 
-# ======================
+    images = []
+    files = []
+
+    if os.path.exists(images_path):
+        images = os.listdir(images_path)
+        images.sort(reverse=True)
+
+    if os.path.exists(recordings_path):
+        files = os.listdir(recordings_path)
+        files.sort(reverse=True)
+
+    return render_template(
+        "cctv.html",
+        images=images,
+        files=files
+    )
+
 # VIDEO FEED
-# ======================
 @app.route("/video_feed")
 def video_feed():
 
@@ -678,6 +788,13 @@ def history():
         images=files
     )
 
+@app.route("/snapshot/<filename>")
+def view_snapshot(filename):
+
+    return send_from_directory(
+        "snapshots",
+        filename
+    )
 @app.route("/record/start")
 def record_start():
 
@@ -709,132 +826,215 @@ def record_stop():
     "/cctv"
     )
 
-@app.route("/forgot",methods=["GET","POST"])
+@app.route("/recordings")
+def recordings_page():
+
+    if "user" not in session:
+        return redirect("/")
+
+    files = []
+
+    if os.path.exists("recordings"):
+        files = os.listdir("recordings")
+        files.sort(reverse=True)
+
+    return render_template(
+        "recordings.html",
+        files=files
+    )
+
+@app.route("/recordings/<filename>")
+def view_recording(filename):
+
+    folder = os.path.join(app.root_path, "recordings")
+
+    return send_from_directory(
+        folder,
+        filename,
+        as_attachment=False
+    )
+
+@app.route("/recordings/view/<filename>")
+def view_recording_page(filename):
+
+    return render_template(
+        "view_recording.html",
+        filename=filename
+    )
+
+@app.route("/debug-recordings")
+def debug_recordings():
+
+    import os
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    folder = os.path.join(base_dir, "recordings")
+
+    return {
+        "base_dir": base_dir,
+        "folder": folder,
+        "exists": os.path.exists(folder),
+        "files": os.listdir(folder) if os.path.exists(folder) else []
+    }
+
+@app.route("/play_recording/<filename>")
+def play_recording(filename):
+
+    return render_template("play_recording.html", filename=filename)
+
+@app.route("/delete_snapshot/<filename>")
+def delete_snapshot(filename):
+
+    if "user" not in session:
+        return redirect("/")
+
+    file_path = os.path.join("snapshots", filename)
+
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    return redirect("/cctv")
+
+# DELETE RECORDING
+@app.route("/delete_recording/<filename>")
+def delete_recording(filename):
+
+    if session.get("role") != "Admin":
+        return "Denied"
+
+    file_path = os.path.join("recordings", filename)
+
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    return redirect("/cctv")
+
+
+@app.route("/forgot", methods=["GET", "POST"])
 def forgot():
 
-    if request.method=="POST":
+    if request.method == "POST":
 
-        username=request.form["username"]
+        username = request.form["username"]
 
-        conn=get_conn()
-        cur=conn.cursor()
-
-        cur.execute("""
-
-        UPDATE Users
-
-        SET reset_requested=TRUE
-
-        WHERE username=%s
-
-        """,(username,))
+        conn = get_conn()
+        cur = conn.cursor()
 
         cur.execute("""
+            SELECT user_id
+            FROM Users
+            WHERE username = %s
+        """, (username,))
 
-        SELECT user_id
-
-        FROM Users
-
-        WHERE username=%s
-
-        """,(username,))
-
-        user=cur.fetchone()
+        user = cur.fetchone()
 
         if user:
 
             cur.execute("""
+                INSERT INTO PasswordResetRequests(
+                    user_id,
+                    status,
+                    created_at
+                )
+                VALUES (%s, 'Pending', NOW())
+            """, (user[0],))
 
-            INSERT INTO Notifications(
-
-            user_id,
-            message
-
-            )
-
-            VALUES(
-
-            %s,
-            %s
-
-            )
-
-            """,(
-
-            user[0],
-            "Password reset requested"
-
-            ))
-
-        conn.commit()
+            conn.commit()
 
         cur.close()
         conn.close()
 
-        return """
-        Request Sent
+        return "Request Sent. Wait Admin Approval"
 
-        Wait Admin Approval
-        """
+    return render_template("forgot.html")
 
-    return render_template(
-    "forgot.html"
-    )
+@app.route("/password_resets")
+def password_resets():
 
-@app.route(
-"/support",
-methods=["GET","POST"]
-)
+    if session.get("role") != "Admin":
+        return "Denied"
 
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, user_id, status, created_at
+        FROM PasswordResetRequests
+        ORDER BY created_at DESC
+    """)
+
+    data = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template("password_resets.html", data=data)
+
+@app.route("/reset/approve/<int:req_id>")
+def approve_reset(req_id):
+
+    if session.get("role") != "Admin":
+        return "Denied"
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE PasswordResetRequests
+        SET status = 'Approved'
+        WHERE id = %s
+    """, (req_id,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect("/password_resets")
+
+@app.route("/reset/reject/<int:req_id>")
+def reject_reset(req_id):
+
+    if session.get("role") != "Admin":
+        return "Denied"
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE PasswordResetRequests
+        SET status = 'Rejected'
+        WHERE id = %s
+    """, (req_id,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect("/password_resets")
+
+@app.route("/support", methods=["GET","POST"])
 def support():
 
-    if request.method=="POST":
+    if request.method == "POST":
 
-        message=request.form["message"]
+        message = request.form["message"]
 
-        conn=get_conn()
-        cur=conn.cursor()
+        conn = get_conn()
+        cur = conn.cursor()
 
         cur.execute("""
-
-        INSERT INTO SupportRequests(
-
-        user_id,
-        message
-
-        )
-
-        VALUES(
-
-        %s,
-        %s
-
-        )
-
-        """,(
-
-        session.get(
-        "user_id"
-        ),
-
-        message
-
-        ))
+            INSERT INTO Requests(user_id, request_type, message, status)
+            VALUES (%s, 'TECH_SUPPORT', %s, 'PENDING')
+        """, (session["user_id"], message))
 
         conn.commit()
 
         cur.close()
         conn.close()
 
-        return """
+        return "Request Sent"
 
-        Request Sent
-
-        """
-
-    return render_template(
-    "support.html"
-    )
+    return render_template("support.html")
 
 @app.route(
 "/supportadmin"
@@ -886,8 +1086,54 @@ def supportadmin():
 
     )
 
-# ======================
+@app.route("/requests")
+def requests():
+
+    if session.get("role") != "Admin":
+        return "Denied"
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, user_id, request_type, message, status, created_at
+        FROM Requests
+        ORDER BY created_at DESC
+    """)
+
+    data = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template("requests.html", data=data)
+
+
+@app.route("/recordings")
+def recordings():
+
+    if session.get(
+    "role"
+    )!="Admin":
+
+        return "Denied"
+
+    files=os.listdir(
+    "recordings"
+    )
+
+    files.sort(
+    reverse=True
+    )
+
+    return render_template(
+
+    "recordings.html",
+
+    files=files
+
+    )
+
 # RUN APP
-# ======================
 if __name__ == "__main__":
     app.run(debug=True)

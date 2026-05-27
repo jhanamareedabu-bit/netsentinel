@@ -4,3 +4,4 @@ DATABASE_URL = "postgresql://postgres:iDJXpmjgDcpQdhfooDMyLYUXNarzVDJW@kodama.pr
 
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
+    sslmode="require"

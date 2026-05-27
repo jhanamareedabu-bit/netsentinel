@@ -1,23 +1,62 @@
-<h1>
+{% extends "base.html" %}
 
-Tech Support Request
+{% block content %}
 
-</h1>
+<div class="card">
 
-<form method="POST">
+    <div class="title">
+        Technical Support
+    </div>
 
-<textarea
-name="message"
-placeholder="Explain issue..."
-required
-></textarea>
+    <p>
 
-<br>
+        Submit concerns regarding:
 
-<button>
+    </p>
 
-Send Request
+    <br>
 
-</button>
+    <ul>
 
-</form>
+        <li>Locked Account</li>
+
+        <li>Password Reset</li>
+
+        <li>CCTV Access Issue</li>
+
+        <li>System Problems</li>
+
+    </ul>
+
+    <br>
+
+    <form method="POST">
+
+        <textarea
+            name="message"
+            placeholder="Describe your issue..."
+            required
+            rows="6"
+            style="
+            width:100%;
+            background:#0f172a;
+            color:white;
+            border:none;
+            padding:12px;
+            border-radius:10px;
+            "
+        ></textarea>
+
+        <br><br>
+
+        <button>
+
+            Submit Request
+
+        </button>
+
+    </form>
+
+</div>
+
+{% endblock %}

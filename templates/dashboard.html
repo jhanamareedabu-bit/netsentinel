@@ -1,56 +1,78 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>NetSentinel Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-</head>
+{% extends "base.html" %}
 
-<body>
+{% block content %}
 
-<div class="container">
+<div class="header">
+    <h1>Welcome, {{session['user']}}</h1>
+    <p>NetSentinel Monitoring Dashboard</p>
+</div>
 
-    <div class="sidebar">
-        <h2>NETSENTINEL</h2>
+<div class="grid">
 
-        <a href="/dashboard">Dashboard</a>
-        <a href="/cctv">CCTV Monitor</a>
-        <a href="/logs">My Logs</a>
-
-        {% if session.get('role') == 'Admin' %}
-            <a href="/admin">Admin Panel</a>
-            <a href="/alllogs">System Logs</a>
-        {% endif %}
-
-        <a href="/logout">Logout</a>
+    <div class="card">
+        <div class="title">Status</div>
+        <div class="card-value">ACTIVE</div>
     </div>
 
-    <div class="main">
+    <div class="card">
+        <div class="title">Total Logs</div>
+        <div class="card-value">{{total_logs}}</div>
+    </div>
 
-        <div class="card">
-            <h3>Welcome {{ session.get('user') }}</h3>
-            <p>Status: <b>ACTIVE</b></p>
-        </div>
+    <div class="card">
+        <div class="title">Camera</div>
+        <div class="card-value">{{camera_status}}</div>
+    </div>
 
-        <div class="card">
-            <h3>Live CCTV Feed</h3>
-            <img src="/video_feed" width="100%">
-        </div>
-
-        <div class="card">
-            <h3>Recent Activity</h3>
-
-            {% for log in logs %}
-                <div class="log">
-                    <b>{{ log[0] }}</b><br>
-                    <small>{{ log[1] }}</small>
-                </div>
-            {% endfor %}
-
-        </div>
-
+    <div class="card">
+        <div class="title">Security</div>
+        <div class="card-value">HIGH</div>
     </div>
 
 </div>
 
-</body>
-</html>
+
+<div class="card">
+
+<div class="title">
+Live CCTV Feed
+</div>
+
+<div class="cctv-box">
+
+<img src="/video_feed">
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="title">
+Recent Activity
+</div>
+
+{% for log in logs %}
+
+<div class="activity-row">
+
+<span>
+
+{{log[0]}}
+
+</span>
+
+<small>
+
+{{log[1]}}
+
+</small>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+{% endblock %}

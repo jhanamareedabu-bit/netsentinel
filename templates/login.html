@@ -1,13 +1,71 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>
+
+NetSentinel Login
+
+</title>
+
+<link
+rel="stylesheet"
+href="{{url_for('static',
+filename='styles.css')}}">
+
+</head>
+
+<body>
+
+<div class="login-box">
+
+<h2>
+
+NetSentinel
+
+</h2>
+
 <form method="POST">
-  <h2>NetSentinel Login</h2>
 
-  <input name="username" placeholder="Username" required>
-  <input name="password" type="password" placeholder="Password" required>
+<input
+name="username"
+placeholder="Username"
+required>
 
-  <button type="submit">Login</button>
-  <a href="/forgot">
-    Forgot Password?
-  </a>
+<input
+name="password"
+type="password"
+placeholder="Password"
+required>
 
-  <p><a href="/register">Create Account</a></p>
+<button>
+
+Login
+
+</button>
+
+<a href="/forgot">
+
+Forgot Password?
+
+</a>
+
+<p>
+
+<a href="/register">
+
+Create Account
+
+</a>
+
+</p>
+
 </form>
+
+</div>
+
+</body>
+
+</html>

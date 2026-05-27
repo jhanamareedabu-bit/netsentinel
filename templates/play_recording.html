@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="card">
+
+    <div class="title">
+        Recording Player
+    </div>
+
+    <video width="100%" controls autoplay>
+        <source src="/recordings/{{ filename }}" type="video/mp4">
+        Your browser does not support video playback.
+    </video>
+
+</div>
+
+{% endblock %}
