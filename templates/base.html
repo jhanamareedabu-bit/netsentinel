@@ -16,19 +16,16 @@
 
         <a href="/dashboard">Dashboard</a>
         {% if session['role']=="Admin" %}
-        <a href="/cctv">CCTV Monitor</a>
+
         {% endif %}
         <a href="/logs">My Logs</a>
 
         {% if session['role'] == 'Admin' %}
             <a href="/admin">Admin Panel</a>
             <a href="/alllogs">System Logs</a>
-            <a href="/notifications">Notifications</a>
         {% endif %}
 
         <a href="/logout">Logout</a>
-
-        <a href="/password_resets">Password Reset Requests</a>
 
     </div>
 
