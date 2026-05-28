@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>NetSentinel</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
@@ -9,41 +10,22 @@
 
 <div class="container">
 
-    <!-- SIDEBAR -->
     <div class="sidebar">
+        <h2>NETSENTINEL</h2>
 
-    <h2>NETSENTINEL</h2>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/logs">My Logs</a>
 
-    <a href="/dashboard">
-        Dashboard
-    </a>
+        {% if session.get('role') == "Admin" %}
+            <a href="/admin">Admin Panel</a>
+            <a href="/all-logs">System Logs</a>
+        {% endif %}
 
-    <a href="/logs">My Logs</a>
+        <a href="/logout">Logout</a>
+    </div>
 
-    {% if session['role']=="Admin" %}
-
-        <a href="/admin">
-            Admin Panel
-        </a>
-
-        <a href="/all-logs">
-            System Logs
-        </a>
-
-    {% endif %}
-
-    <a href="/logout">
-        Logout
-    </a>
-
-</div>
-
-    <!-- MAIN CONTENT AREA -->
     <div class="main">
-
-        {% block content %}
-        {% endblock %}
-
+        {% block content %}{% endblock %}
     </div>
 
 </div>

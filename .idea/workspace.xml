@@ -2,19 +2,22 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="40ad5d9e-1a1a-483f-bc57-e3ac549ad8fe" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/check_db.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/seed_users.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/templates/auth_base.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/schema.sql" beforeDir="false" afterPath="$PROJECT_DIR$/schema.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/recordings/record_20260525_232054.avi" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/snapshots/20260522_234715.jpg" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/static/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/static/styles.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/admin.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/admin.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/admin_dashboard.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/admin_dashboard.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/templates/base.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/base.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/dashboard.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/dashboard.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/cctv.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/forgot.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/history.html" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/templates/login.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/login.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/logs.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/logs.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/view_recording.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/password_resets.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/play_recording.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/recordings.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/support.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/support_admin.html" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -24,8 +27,8 @@
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
-        <option value="HTML File" />
         <option value="Python Script" />
+        <option value="HTML File" />
       </list>
     </option>
   </component>

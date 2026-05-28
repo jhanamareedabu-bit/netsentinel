@@ -4,7 +4,6 @@
 
 <h2 class="page-title">SOC ADMIN DASHBOARD</h2>
 
-<!-- CARDS -->
 <div class="grid">
 
     <div class="card">Total Users: {{ total_users }}</div>
@@ -18,7 +17,6 @@
 
 </div>
 
-<!-- CCTV SECTION -->
 <div class="card large">
 
     <div class="title">LIVE CCTV MONITORING</div>
@@ -29,7 +27,6 @@
 
 </div>
 
-<!-- SECURITY FEED -->
 <div class="card">
 
     <div class="title">SECURITY FEED</div>
@@ -37,7 +34,7 @@
     {% for log in logs %}
 
 <div class="log">
-    
+
     <table>
     <tr>
         <th>User</th>

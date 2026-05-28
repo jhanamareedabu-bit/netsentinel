@@ -16,7 +16,12 @@ def check_password(password: str, hashed: str) -> bool:
 
 MAX_ATTEMPTS = 3
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    static_folder="static",
+    static_url_path="/static"
+)
+
 app.secret_key = "secret123"
 
 app.permanent_session_lifetime=timedelta(
@@ -34,7 +39,7 @@ print("RUNNING FILE:", __file__)
 @app.route("/", methods=["GET", "POST"])
 def login():
 
-    # if already logged in → go dashboard
+    # if already logged in, go dashboard
     if request.method == "GET":
         if "user_id" in session:
             return redirect("/dashboard")
@@ -216,10 +221,12 @@ def register():
 @app.before_request
 def security_guard():
 
-    # allow public routes
-    public_routes = ["/", "/register", "/static"]
+    public_routes = ["/", "/register"]
 
     if request.endpoint == "login":
+        return
+
+    if request.path.startswith("/static"):
         return
 
     if request.path in public_routes:
@@ -228,12 +235,12 @@ def security_guard():
     if "user_id" not in session:
         return redirect("/")
 
-    # IP MATCH (anti session hijack light protection)
+    # IP MATCH
     if session.get("ip") != request.remote_addr:
         session.clear()
         return redirect("/")
 
-    # TIMEOUT CHECK (SINGLE SYSTEM ONLY)
+    # TIMEOUT CHECK
     last_active = session.get("last_active")
 
     if last_active:
@@ -256,9 +263,7 @@ def dashboard():
     conn = get_conn()
     cur = conn.cursor()
 
-    # =========================
     # ADMIN DASHBOARD
-    # =========================
     if session["role"] == "Admin":
 
         # RECENT LOGS
@@ -291,9 +296,7 @@ def dashboard():
         cur.execute("SELECT COUNT(*) FROM ActivityLogs")
         total_logs = cur.fetchone()[0]
 
-    # =========================
     # USER DASHBOARD
-    # =========================
     else:
 
         cur.execute("""
