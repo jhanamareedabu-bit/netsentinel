@@ -1,18 +1,20 @@
 from flask import Flask, render_template, request, redirect, session, Response
-from database import get_conn
-from camera import (
-generate_frames,
-save_snapshot,
-start_recording,
-stop_recording
-)
-from flask import redirect, url_for
-
-from flask import send_from_directory
-from datetime import timedelta
-import os
+from datetime import timedelta, datetime
 import socket
 import uuid
+
+from camera import generate_frames
+from database import get_conn
+
+import bcrypt
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def check_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+MAX_ATTEMPTS = 3
 
 app = Flask(__name__)
 app.secret_key = "secret123"
@@ -21,229 +23,150 @@ app.permanent_session_lifetime=timedelta(
 minutes=15
 )
 
+logs = []
+users = 0
+total_logs = 0
+
+
 print("RUNNING FILE:", __file__)
 
 # LOGIN
 @app.route("/", methods=["GET", "POST"])
 def login():
 
-    if request.method == "POST":
+    # if already logged in → go dashboard
+    if request.method == "GET":
+        if "user_id" in session:
+            return redirect("/dashboard")
+        return render_template("login.html")
 
-        username = request.form["username"]
-        password = request.form["password"]
+    # POST LOGIN
+    username = request.form["username"]
+    password = request.form["password"]
 
-        conn = get_conn()
-        cur = conn.cursor()
+    conn = get_conn()
+    cur = conn.cursor()
 
-        try:
+    try:
+        # FETCH USER
+        cur.execute("""
+            SELECT user_id, username, password_hash, status,
+                   failed_attempts, role, approval_status
+            FROM Users
+            WHERE username=%s
+        """, (username,))
+
+        user = cur.fetchone()
+
+        # USER NOT FOUND
+        if not user:
             cur.execute("""
-                SELECT user_id, username, password_hash, status, failed_attempts, role, approval_status
-                FROM Users
-                WHERE username=%s
-            """, (username,))
+                INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
+                VALUES (%s, %s, %s, %s)
+            """, (None, f"FAILED LOGIN - unknown user: {username}", request.remote_addr, "AUTH"))
 
-            user = cur.fetchone()
+            conn.commit()
+            return render_template("login.html", error="Invalid credentials")
 
-            if not user:
-                cur.execute("""
-                    INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
-                    VALUES (%s, %s, %s, %s)
-                """, (None, f"FAILED LOGIN - unknown user: {username}", request.remote_addr, "SYSTEM"))
+        user_id, uname, password_hash, status, attempts, role, approval_status = user
 
-                conn.commit()
-                return "User not found"
+        # NOT APPROVED
+        if approval_status != "Approved":
+            return render_template("login.html", error="Account pending admin approval")
 
-            user_id, uname, db_pass, status, attempts, role, approval_status = user
+        # LOCKED ACCOUNT
+        if status == "Locked":
+            return render_template("login.html", error="Account locked. Contact admin")
 
-            if approval_status != "Approved":
-                return "Account waiting for Admin approval."
+        # PASSWORD CHECK
+        password_match = check_password(password, password_hash)
 
-            if status == "Locked":
-                return redirect(
-                    "/support"
-                )
+        # SUCCESS LOGIN
+        if password_match:
 
-            if password == db_pass:
-                device_name = socket.gethostname()
+            # reset failed attempts
+            cur.execute("""
+                UPDATE Users
+                SET failed_attempts = 0
+                WHERE user_id = %s
+            """, (user_id,))
 
-                mac = uuid.getnode()
+            # device logging
+            device_name = socket.gethostname()
+            mac = ':'.join(['%012X' % uuid.getnode()][0][i:i+2] for i in range(0, 12, 2))
 
-                mac = ':'.join(
+            cur.execute("""
+                INSERT INTO Devices(device_name, ip_address, mac_address, user_id)
+                VALUES (%s, %s, %s, %s)
+            """, (device_name, request.remote_addr, mac, user_id))
 
-                    [
-                        '%012X' % mac
-                    ][0][i:i + 2]
+            # activity log
+            cur.execute("""
+                INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, "LOGIN SUCCESS", request.remote_addr, "AUTH"))
 
-                    for i in range(
-                        0,
-                        12,
-                        2
-                    )
+            conn.commit()
 
-                )
+            # CLEAN SESSION
+            session.clear()
+            session.permanent = True
 
-                cur.execute("""
-                
+            session["user_id"] = user_id
+            session["role"] = role
+            session["ip"] = request.remote_addr
+            session["last_active"] = datetime.now().timestamp()
 
-                            INSERT INTO Devices(device_name,
-                                                ip_address,
-                                                mac_address,
-                                                user_id)
+            return redirect("/dashboard")
 
-                            VALUES (%s,
-                                    %s,
-                                    %s,
-                                    %s)
+        # FAILED LOGIN HANDLING
+        attempts += 1
 
-                            """, (
+        if attempts >= 3:
+            status_update = "Locked"
 
-                                device_name,
-                                request.remote_addr,
-                                mac,
-                                user_id
+            feedback = "Account locked due to 3 failed attempts. Please contact admin."
+        else:
+            status_update = "Active"
 
-                            ))
-
-                cur.execute("""
-                    UPDATE Users
-                    SET failed_attempts = 0
-                    WHERE user_id = %s
-                """, (user_id,))
-
-                cur.execute("""
-                    INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
-                    VALUES (%s, %s, %s, %s)
-                """, (user_id, "LOGIN SUCCESS", request.remote_addr, "AUTH"))
-
-                cur.execute("""
-
-                            SELECT last_login_ip
-
-                            FROM Users
-
-                            WHERE user_id = %s
-
-                            """, (user_id,))
-
-                old_ip = cur.fetchone()[0]
-
-                if old_ip and old_ip != request.remote_addr:
-                    cur.execute("""
-
-                                INSERT INTO Notifications(user_id,
-                                                          message)
-
-                                VALUES (%s,
-                                        %s)
-
-                                """, (
-
-                                    user_id,
-
-                                    "Suspicious Login New IP"
-
-                                ))
-
-                    cur.execute("""
-
-                                UPDATE Users
-
-                                SET last_login_ip=%s,
-
-                                    last_login_time=NOW()
-
-                                WHERE user_id = %s
-
-                                """, (
-
-                                    request.remote_addr,
-                                    user_id
-
-                                ))
-
-
-                conn.commit()
-
-                session.permanent = True
-
-                session["user_id"] = user_id
-                session["user"] = username
-                session["role"] = role
-
-                return redirect("/dashboard")
-
+            if attempts == 2:
+                feedback = "⚠️ Warning: Last attempt remaining before account lock!"
             else:
+                feedback = f"Wrong password. Attempt {attempts}/3"
 
-                attempts += 1
-                status_update = "Locked" if attempts >= 3 else "Active"
+        cur.execute("""
+            UPDATE Users
+            SET failed_attempts = %s,
+                status = %s
+            WHERE user_id = %s
+        """, (attempts, status_update, user_id))
 
-                cur.execute("""
-                    UPDATE Users
-                    SET failed_attempts = %s,
-                        status = %s
-                    WHERE user_id = %s
-                """, (attempts, status_update, user_id))
+        cur.execute("""
+            INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
+            VALUES (%s, %s, %s, %s)
+        """, (user_id, f"LOGIN FAILED ({attempts}/3)", request.remote_addr, "AUTH"))
 
-                cur.execute("""
-                    INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
-                    VALUES (%s, %s, %s, %s)
-                """, (user_id, f"LOGIN FAILED attempt {attempts}", request.remote_addr, "AUTH"))
+        conn.commit()
 
-                conn.commit()
+        return feedback
 
-                return f"Wrong password. Attempt {attempts}/3"
-
-        finally:
-            cur.close()
-            conn.close()
-
-    return render_template("login.html")
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route("/logout")
+
 def logout():
 
-    conn=get_conn()
-    cur=conn.cursor()
+    conn = get_conn()
+    cur = conn.cursor()
 
     if session.get("user_id"):
 
         cur.execute("""
-
-        INSERT INTO ActivityLogs(
-
-        user_id,
-
-        action_description,
-
-        ip_address,
-
-        log_type
-
-        )
-
-        VALUES(
-
-        %s,
-
-        %s,
-
-        %s,
-
-        %s
-
-        )
-
-        """,(
-
-        session["user_id"],
-
-        "LOGOUT",
-
-        request.remote_addr,
-
-        "AUTH"
-
-        ))
+            INSERT INTO ActivityLogs(user_id, action_description)
+            VALUES (%s, %s)
+        """, (session["user_id"], "LOGOUT"))
 
         conn.commit()
 
@@ -251,136 +174,153 @@ def logout():
     conn.close()
 
     session.clear()
-
     return redirect("/")
 
 @app.route("/register", methods=["GET","POST"])
 def register():
 
-    if request.method=="POST":
+    if request.method == "POST":
 
-        username=request.form["username"]
-        fullname=request.form["fullname"]
-        password=request.form["password"]
+        username = request.form["username"]
+        fullname = request.form["fullname"]
+        password = request.form["password"]
 
-        conn=get_conn()
-        cur=conn.cursor()
+        conn = get_conn()
+        cur = conn.cursor()
 
         try:
+            hashed_pw = hash_password(password)
 
             cur.execute("""
-
-            INSERT INTO Users(
-
-            username,
-            full_name,
-            password_hash,
-            role,
-            status,
-            approval_status,
-            failed_attempts
-
-            )
-
-            VALUES(
-
-            %s,
-            %s,
-            %s,
-            'User',
-            'Active',
-            'Pending',
-            0
-
-            )
-
-            """,(
-
-            username,
-            fullname,
-            password
-
-            ))
+                INSERT INTO Users(
+                    username,
+                    full_name,
+                    password_hash,
+                    role,
+                    status,
+                    failed_attempts
+                )
+                VALUES (%s, %s, %s, 'User', 'Active', 0)
+            """, (username, fullname, hashed_pw))
 
             conn.commit()
 
-            return """
-
-            Account Created
-
-            Wait Admin Approval
-
-            <br><br>
-
-            <a href='/'>
-            Login
-            </a>
-
-            """
+            return "Account Created"
 
         finally:
-
             cur.close()
             conn.close()
 
-    return render_template(
-    "register.html"
-    )
+    return render_template("register.html")
+
+@app.before_request
+def security_guard():
+
+    # allow public routes
+    public_routes = ["/", "/register", "/static"]
+
+    if request.endpoint == "login":
+        return
+
+    if request.path in public_routes:
+        return
+
+    if "user_id" not in session:
+        return redirect("/")
+
+    # IP MATCH (anti session hijack light protection)
+    if session.get("ip") != request.remote_addr:
+        session.clear()
+        return redirect("/")
+
+    # TIMEOUT CHECK (SINGLE SYSTEM ONLY)
+    last_active = session.get("last_active")
+
+    if last_active:
+        elapsed = datetime.now().timestamp() - last_active
+
+        if elapsed > 900:  # 15 minutes
+            session.clear()
+            return redirect("/")
+
+    # update activity timestamp
+    session["last_active"] = datetime.now().timestamp()
 
 # DASHBOARD USER ONLy
 @app.route("/dashboard")
 def dashboard():
 
-    if "user" not in session:
+    if "user_id" not in session:
         return redirect("/")
 
     conn = get_conn()
     cur = conn.cursor()
 
-    # ADMIN DASHBOARD LOGS
-
+    # =========================
+    # ADMIN DASHBOARD
+    # =========================
     if session["role"] == "Admin":
 
+        # RECENT LOGS
         cur.execute("""
+
             SELECT
                 COALESCE(Users.username,'SYSTEM'),
                 action_description,
+                ip_address,
+                log_type,
                 timestamp
+
             FROM ActivityLogs
+
             LEFT JOIN Users
-            ON Users.user_id=ActivityLogs.user_id
+            ON Users.user_id = ActivityLogs.user_id
+
             ORDER BY timestamp DESC
             LIMIT 10
+
         """)
 
         logs = cur.fetchall()
 
-        # KPIs ADMIN ONLY
+        # TOTAL USERS
         cur.execute("SELECT COUNT(*) FROM Users")
         users = cur.fetchone()[0]
 
+        # TOTAL LOGS
         cur.execute("SELECT COUNT(*) FROM ActivityLogs")
         total_logs = cur.fetchone()[0]
 
-    # USER DASHBOARD LOGS
-
+    # =========================
+    # USER DASHBOARD
+    # =========================
     else:
 
         cur.execute("""
+
             SELECT
                 action_description,
+                ip_address,
+                log_type,
                 timestamp
+
             FROM ActivityLogs
+
             WHERE user_id=%s
+
             ORDER BY timestamp DESC
             LIMIT 10
+
         """, (session["user_id"],))
 
         logs = cur.fetchall()
 
-        # KPIs USER ONLY
-        cur.execute("SELECT COUNT(*) FROM ActivityLogs WHERE user_id=%s",
-                    (session["user_id"],))
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM ActivityLogs
+            WHERE user_id=%s
+        """, (session["user_id"],))
+
         total_logs = cur.fetchone()[0]
 
         users = None
@@ -388,13 +328,9 @@ def dashboard():
     cur.close()
     conn.close()
 
-    camera_status = "ONLINE"
-
     return render_template(
         "dashboard.html",
         logs=logs,
-        role=session["role"],
-        camera_status=camera_status,
         total_logs=total_logs,
         users=users
     )
@@ -418,10 +354,6 @@ def admin_dashboard():
     cur.execute("SELECT COUNT(*) FROM Users WHERE status='Locked'")
     locked_users = cur.fetchone()[0]
 
-    # REQUESTS
-    cur.execute("SELECT COUNT(*) FROM Requests WHERE status='PENDING'")
-    pending_requests = cur.fetchone()[0]
-
     # LOGS
     cur.execute("SELECT COUNT(*) FROM ActivityLogs WHERE log_type='AUTH'")
     auth_logs = cur.fetchone()[0]
@@ -434,12 +366,11 @@ def admin_dashboard():
         total_users=total_users,
         active_users=active_users,
         locked_users=locked_users,
-        pending_requests=pending_requests,
         auth_logs=auth_logs
     )
 
-@app.route("/alllogs")
-def alllogs():
+@app.route("/all-logs")
+def all_logs():
 
     if session.get("role")!="Admin":
         return "Access Denied"
@@ -479,7 +410,7 @@ def alllogs():
 @app.route("/logs")
 def logs():
 
-    if "user" not in session:
+    if "user_id" not in session:
         return redirect("/")
 
     conn = get_conn()
@@ -488,10 +419,19 @@ def logs():
     user_id = session["user_id"]
 
     cur.execute("""
-        SELECT action_description, ip_address, log_type, timestamp
+
+        SELECT
+            action_description,
+            ip_address,
+            log_type,
+            timestamp
+
         FROM ActivityLogs
+
         WHERE user_id = %s
+
         ORDER BY timestamp DESC
+
     """, (user_id,))
 
     data = cur.fetchall()
@@ -499,7 +439,10 @@ def logs():
     cur.close()
     conn.close()
 
-    return render_template("logs.html", logs=data)
+    return render_template(
+        "logs.html",
+        logs=data
+    )
 
 # ADMIN PANEL
 @app.route("/admin")
@@ -630,44 +573,6 @@ def video_feed():
         generate_frames(),
         mimetype='multipart/x-mixed-replace; boundary=frame'
     )
-
-@app.route("/forgot", methods=["GET", "POST"])
-def forgot():
-
-    if request.method == "POST":
-
-        username = request.form["username"]
-
-        conn = get_conn()
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT user_id
-            FROM Users
-            WHERE username = %s
-        """, (username,))
-
-        user = cur.fetchone()
-
-        if user:
-
-            cur.execute("""
-                INSERT INTO PasswordResetRequests(
-                    user_id,
-                    status,
-                    created_at
-                )
-                VALUES (%s, 'Pending', NOW())
-            """, (user[0],))
-
-            conn.commit()
-
-        cur.close()
-        conn.close()
-
-        return "Request Sent. Wait Admin Approval"
-
-    return render_template("forgot.html")
 
 # RUN APP
 if __name__ == "__main__":

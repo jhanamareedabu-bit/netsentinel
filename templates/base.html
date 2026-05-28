@@ -12,22 +12,31 @@
     <!-- SIDEBAR -->
     <div class="sidebar">
 
-        <h2>NETSENTINEL</h2>
+    <h2>NETSENTINEL</h2>
 
-        <a href="/dashboard">Dashboard</a>
-        {% if session['role']=="Admin" %}
+    <a href="/dashboard">
+        Dashboard
+    </a>
 
-        {% endif %}
-        <a href="/logs">My Logs</a>
+    <a href="/logs">My Logs</a>
 
-        {% if session['role'] == 'Admin' %}
-            <a href="/admin">Admin Panel</a>
-            <a href="/alllogs">System Logs</a>
-        {% endif %}
+    {% if session['role']=="Admin" %}
 
-        <a href="/logout">Logout</a>
+        <a href="/admin">
+            Admin Panel
+        </a>
 
-    </div>
+        <a href="/all-logs">
+            System Logs
+        </a>
+
+    {% endif %}
+
+    <a href="/logout">
+        Logout
+    </a>
+
+</div>
 
     <!-- MAIN CONTENT AREA -->
     <div class="main">

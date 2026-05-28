@@ -2,40 +2,28 @@
 
 {% block content %}
 
-<div class="card">
-
-<div class="title">
-
-My Activity Logs
-
-</div>
+<h2>My Activity Logs</h2>
 
 <table>
 
-<tr>
+    <tr>
+        <th>Action</th>
+        <th>IP Address</th>
+        <th>Type</th>
+        <th>Timestamp</th>
+    </tr>
 
-<th>Action</th>
-<th>IP</th>
-<th>Type</th>
-<th>Time</th>
+    {% for log in logs %}
 
-</tr>
+    <tr>
+        <td>{{ log[0] }}</td>
+        <td>{{ log[1] }}</td>
+        <td>{{ log[2] }}</td>
+        <td>{{ log[3] }}</td>
+    </tr>
 
-{% for log in logs %}
-
-<tr>
-
-<td>{{log[0]}}</td>
-<td>{{log[1]}}</td>
-<td>{{log[2]}}</td>
-<td>{{log[3]}}</td>
-
-</tr>
-
-{% endfor %}
+    {% endfor %}
 
 </table>
-
-</div>
 
 {% endblock %}

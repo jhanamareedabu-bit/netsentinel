@@ -10,7 +10,6 @@
     <div class="card">Total Users: {{ total_users }}</div>
     <div class="card">Active Users: {{ active_users }}</div>
     <div class="card">Locked Accounts: {{ locked_users }}</div>
-    <div class="card">Pending Requests: {{ pending_requests }}</div>
 
     <div class="card">Auth Logs: {{ auth_logs }}</div>
     <div class="card">Camera Status: ONLINE</div>
@@ -36,11 +35,32 @@
     <div class="title">SECURITY FEED</div>
 
     {% for log in logs %}
-        <div class="log">
-            {{ log[1] }} <br>
-            <small>{{ log[0] }} | {{ log[2] }}</small>
-        </div>
+
+<div class="log">
+    
+    <table>
+    <tr>
+        <th>User</th>
+        <th>Action</th>
+        <th>IP Address</th>
+        <th>Type</th>
+        <th>Timestamp</th>
+    </tr>
+
+    {% for log in logs %}
+    <tr>
+        <td>{{ log[0] }}</td>
+        <td>{{ log[1] }}</td>
+        <td>{{ log[2] }}</td>
+        <td>{{ log[3] }}</td>
+        <td>{{ log[4] }}</td>
+    </tr>
     {% endfor %}
+</table>
+
+</div>
+
+{% endfor %}
 
 </div>
 

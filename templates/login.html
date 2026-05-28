@@ -1,71 +1,40 @@
-<!DOCTYPE html>
+<div class="login-container">
 
-<html>
+    <!-- LOGIN CARD -->
+    <div class="login-card">
 
-<head>
+        <h1>NetSentinel</h1>
+        <p class="subtitle">CCTV Monitoring System</p>
 
-<title>
+        <form method="POST">
 
-NetSentinel Login
+            <input type="text"
+                   name="username"
+                   placeholder="Username"
+                   required>
 
-</title>
+            <input type="password"
+                   name="password"
+                   placeholder="Password"
+                   required>
 
-<link
-rel="stylesheet"
-href="{{url_for('static',
-filename='styles.css')}}">
+            <button type="submit">
+                LOGIN
+            </button>
 
-</head>
+        </form>
 
-<body>
+    </div>
 
-<div class="login-box">
+    <!-- CREATE ACCOUNT CARD -->
+    <div class="register-card">
 
-<h2>
+        <p>No account yet?</p>
 
-NetSentinel
+        <a href="/register" class="register-btn">
+            Create Account
+        </a>
 
-</h2>
-
-<form method="POST">
-
-<input
-name="username"
-placeholder="Username"
-required>
-
-<input
-name="password"
-type="password"
-placeholder="Password"
-required>
-
-<button>
-
-Login
-
-</button>
-
-<a href="/forgot">
-
-Forgot Password?
-
-</a>
-
-<p>
-
-<a href="/register">
-
-Create Account
-
-</a>
-
-</p>
-
-</form>
+    </div>
 
 </div>
-
-</body>
-
-</html>

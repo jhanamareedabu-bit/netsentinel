@@ -3,7 +3,7 @@
 {% block content %}
 
 <div class="header">
-    <h1>Welcome, {{session['user']}}</h1>
+    <h1>Welcome, {{ session['user'] }}</h1>
     <p>NetSentinel Monitoring Dashboard</p>
 </div>
 
@@ -16,12 +16,12 @@
 
     <div class="card">
         <div class="title">Total Logs</div>
-        <div class="card-value">{{total_logs}}</div>
+        <div class="card-value">{{ total_logs }}</div>
     </div>
 
     <div class="card">
         <div class="title">Camera</div>
-        <div class="card-value">{{camera_status}}</div>
+        <div class="card-value">{{ camera_status }}</div>
     </div>
 
     <div class="card">
@@ -31,47 +31,67 @@
 
 </div>
 
-
+<!-- CCTV -->
 <div class="card">
 
-<div class="title">
-Live CCTV Feed
-</div>
+    <div class="title">
+        Live CCTV Feed
+    </div>
 
-<div class="cctv-box">
-
-<img src="/video_feed">
-
-</div>
+    <div class="cctv-box">
+        <img src="/video_feed">
+    </div>
 
 </div>
 
-
+<!-- LOGS -->
 <div class="card">
 
-<div class="title">
-Recent Activity
-</div>
+    <div class="title">
+        Recent Activity
+    </div>
 
-{% for log in logs %}
+    <table>
 
-<div class="activity-row">
+        <tr>
 
-<span>
+            {% if session["role"] == "Admin" %}
+                <th>User</th>
+            {% endif %}
 
-{{log[0]}}
+            <th>Action</th>
+            <th>IP Address</th>
+            <th>Type</th>
+            <th>Timestamp</th>
 
-</span>
+        </tr>
 
-<small>
+        {% for log in logs %}
 
-{{log[1]}}
+        <tr>
 
-</small>
+            {% if session["role"] == "Admin" %}
 
-</div>
+                <td>{{ log[0] }}</td>
+                <td>{{ log[1] }}</td>
+                <td>{{ log[2] }}</td>
+                <td>{{ log[3] }}</td>
+                <td>{{ log[4] }}</td>
 
-{% endfor %}
+            {% else %}
+
+                <td>{{ log[0] }}</td>
+                <td>{{ log[1] }}</td>
+                <td>{{ log[2] }}</td>
+                <td>{{ log[3] }}</td>
+
+            {% endif %}
+
+        </tr>
+
+        {% endfor %}
+
+    </table>
 
 </div>
 
