@@ -3,8 +3,8 @@
 {% block content %}
 
 <div class="header">
-    <h1>Welcome, {{ session['user'] }}</h1>
-    <p>NetSentinel Monitoring Dashboard</p>
+    <h1>Welcome, {{username}}</h1>
+    <p class="subtitle">NetSentinel Monitoring Dashboard</p>
 </div>
 
 <div class="grid">
@@ -21,7 +21,7 @@
 
     <div class="card">
         <div class="title">Camera</div>
-        <div class="card-value">{{ camera_status }}</div>
+        <div class="card-value">{{camera_status}}</div>
     </div>
 
     <div class="card">
@@ -38,8 +38,8 @@
         Live CCTV Feed
     </div>
 
-    <div class="cctv-box">
-        <img src="/video_feed">
+     <div class="cctv-box">
+        <img src="https://name-meat-yet-stage.trycloudflare.com/stream?key=praise-the-fool">
     </div>
 
 </div>
@@ -55,7 +55,7 @@
 
         <tr>
 
-            {% if session["role"] == "Admin" %}
+            {% if session.get("role") == "Admin" %}
                 <th>User</th>
             {% endif %}
 
@@ -70,7 +70,7 @@
 
         <tr>
 
-            {% if session["role"] == "Admin" %}
+            {% if session.get("role") == "Admin" %}
 
                 <td>{{ log[0] }}</td>
                 <td>{{ log[1] }}</td>

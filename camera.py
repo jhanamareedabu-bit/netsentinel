@@ -3,15 +3,14 @@ import os
 import time
 from datetime import datetime
 
-
 recording = False
 video_writer = None
 
-RECORD_FOLDER="recordings"
+RECORD_FOLDER = "recordings"
 
 os.makedirs(
-RECORD_FOLDER,
-exist_ok=True
+    RECORD_FOLDER,
+    exist_ok=True
 )
 
 # CAMERA INIT
@@ -26,68 +25,56 @@ if not camera.isOpened():
     )
 
 
-SNAP_FOLDER = "snapshots"
+def add_cctv_overlay(frame):
 
-if not os.path.exists(SNAP_FOLDER):
-    os.makedirs(SNAP_FOLDER)
-
-
-def start_recording():
-
-    global recording
-    global video_writer
-
-    filename = os.path.join(
-
-        RECORD_FOLDER,
-
-        time.strftime(
-
-            "record_%Y%m%d_%H%M%S.avi"
-
-        )
-
+    timestamp = datetime.now().strftime(
+        "NETSENTINEL CAM-01 | %Y-%m-%d %H:%M:%S"
     )
 
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-
-    video_writer = cv2.VideoWriter(
-        filename,
-        fourcc,
-        20,
-        (640, 480)
+    cv2.rectangle(
+        frame,
+        (5, 5),
+        (320, 45),
+        (0, 0, 0),
+        -1
     )
 
-    recording = True
+    # CCTV timestamp text
+    cv2.putText(
+        frame,
+        timestamp,
+        (15, 32),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (0, 255, 0),
+        2,
+        cv2.LINE_AA
+    )
 
-
-def stop_recording():
-
-    global recording
-    global video_writer
-
-    recording = False
-
-    if video_writer:
-
-        video_writer.release()
-        video_writer = None
+    return frame
 
 
 def generate_frames():
 
     global recording
+    global video_writer
 
     while True:
 
         if not camera.isOpened():
+            time.sleep(0.5)
             continue
 
         success, frame = camera.read()
 
         if not success:
+            time.sleep(0.01)
             continue
 
+        # ADD TIMESTAMP OVERLAY
+        frame = add_cctv_overlay(frame)
+
+        # RECORDING
         if recording and video_writer:
 
             video_writer.write(
@@ -107,32 +94,8 @@ def generate_frames():
         yield (
 
             b'--frame\r\n'
-            b'Content-Type:image/jpeg\r\n\r\n'
+            b'Content-Type: image/jpeg\r\n\r\n'
             + frame_bytes +
             b'\r\n'
 
         )
-
-
-def save_snapshot():
-
-    success, frame = camera.read()
-
-    if not success:
-        return None
-
-    filename = datetime.now().strftime(
-        "%Y%m%d_%H%M%S.jpg"
-    )
-
-    path = os.path.join(
-        SNAP_FOLDER,
-        filename
-    )
-
-    cv2.imwrite(
-        path,
-        frame
-    )
-
-    return filename

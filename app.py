@@ -1,12 +1,37 @@
 from flask import Flask, render_template, request, redirect, session, Response
 from datetime import timedelta, datetime
+from flask import flash
+from dotenv import load_dotenv
+
 import socket
 import uuid
+import os
 
 from camera import generate_frames
 from database import get_conn
 
+
 import bcrypt
+
+from flask import request
+
+load_dotenv()
+
+def get_ip():
+    forwarded = request.headers.get("CF-Connecting-IP")
+
+    if forwarded:
+        return forwarded
+
+    xff = request.headers.get("X-Forwarded-For")
+    if xff:
+
+        return xff.split(",")[0].strip()
+
+    return request.remote_addr
+
+def is_online(last_active):
+    return datetime.now() - last_active < timedelta(minutes=5)
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -22,16 +47,19 @@ app = Flask(
     static_url_path="/static"
 )
 
-app.secret_key = "secret123"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = True
+
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+app.secret_key = os.getenv("SECRET_KEY")
 
 app.permanent_session_lifetime=timedelta(
 minutes=15
 )
-
-logs = []
-users = 0
-total_logs = 0
-
 
 print("RUNNING FILE:", __file__)
 
@@ -68,20 +96,36 @@ def login():
             cur.execute("""
                 INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
                 VALUES (%s, %s, %s, %s)
-            """, (None, f"FAILED LOGIN - unknown user: {username}", request.remote_addr, "AUTH"))
+            """, (
+                None,
+                f"FAILED LOGIN - unknown user: {username}",
+                get_ip(),
+                "AUTH"
+            ))
 
             conn.commit()
-            return render_template("login.html", error="Invalid credentials")
+            flash("Invalid username or password.", "danger")
+            return redirect("/")
 
         user_id, uname, password_hash, status, attempts, role, approval_status = user
 
         # NOT APPROVED
         if approval_status != "Approved":
-            return render_template("login.html", error="Account pending admin approval")
+            flash(
+                "Your account is waiting for administrator approval.",
+                "info"
+            )
+
+            return redirect("/")
 
         # LOCKED ACCOUNT
         if status == "Locked":
-            return render_template("login.html", error="Account locked. Contact admin")
+            flash(
+                "Account locked. Please contact an administrator.",
+                "warning"
+            )
+
+            return redirect("/")
 
         # PASSWORD CHECK
         password_match = check_password(password, password_hash)
@@ -103,13 +147,13 @@ def login():
             cur.execute("""
                 INSERT INTO Devices(device_name, ip_address, mac_address, user_id)
                 VALUES (%s, %s, %s, %s)
-            """, (device_name, request.remote_addr, mac, user_id))
+            """, (device_name, get_ip(), mac, user_id))
 
             # activity log
             cur.execute("""
                 INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
                 VALUES (%s, %s, %s, %s)
-            """, (user_id, "LOGIN SUCCESS", request.remote_addr, "AUTH"))
+            """, (user_id, "LOGIN SUCCESS", get_ip(), "AUTH"))
 
             conn.commit()
 
@@ -118,9 +162,12 @@ def login():
             session.permanent = True
 
             session["user_id"] = user_id
+            session["user"] = username
             session["role"] = role
-            session["ip"] = request.remote_addr
+            session["ip"] = get_ip()
             session["last_active"] = datetime.now().timestamp()
+
+            flash("Login successful!", "success")
 
             return redirect("/dashboard")
 
@@ -130,14 +177,15 @@ def login():
         if attempts >= 3:
             status_update = "Locked"
 
-            feedback = "Account locked due to 3 failed attempts. Please contact admin."
+            flash("Account has been blocked", "warning")
+
         else:
             status_update = "Active"
 
             if attempts == 2:
-                feedback = "⚠️ Warning: Last attempt remaining before account lock!"
+                flash( "⚠️ Warning: Last attempt remaining before account lock!")
             else:
-                feedback = f"Wrong password. Attempt {attempts}/3"
+               flash( f"Wrong password. Attempt {attempts}/3")
 
         cur.execute("""
             UPDATE Users
@@ -149,11 +197,11 @@ def login():
         cur.execute("""
             INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
             VALUES (%s, %s, %s, %s)
-        """, (user_id, f"LOGIN FAILED ({attempts}/3)", request.remote_addr, "AUTH"))
+        """, (user_id, f"LOGIN FAILED ({attempts}/3)", get_ip(), "AUTH"))
 
         conn.commit()
 
-        return feedback
+        return redirect("/")
 
     finally:
         cur.close()
@@ -183,7 +231,6 @@ def logout():
 
 @app.route("/register", methods=["GET","POST"])
 def register():
-
     if request.method == "POST":
 
         username = request.form["username"]
@@ -197,20 +244,27 @@ def register():
             hashed_pw = hash_password(password)
 
             cur.execute("""
-                INSERT INTO Users(
-                    username,
-                    full_name,
-                    password_hash,
-                    role,
-                    status,
-                    failed_attempts
-                )
+                INSERT INTO Users(username, full_name, password_hash, role, status, failed_attempts)
                 VALUES (%s, %s, %s, 'User', 'Active', 0)
             """, (username, fullname, hashed_pw))
 
+            cur.execute("""
+                INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
+                VALUES (NULL, %s, %s, 'REGISTER')
+            """, (
+                f"NEW ACCOUNT CREATED: {username}",
+                get_ip()
+            ))
+
             conn.commit()
 
-            return "Account Created"
+            flash("Account created successfully. Please login.", "success")
+            return redirect("/")
+
+        except Exception:
+            conn.rollback()
+            flash("Username already exists or error occurred.", "danger")
+            return redirect("/register")
 
         finally:
             cur.close()
@@ -236,7 +290,7 @@ def security_guard():
         return redirect("/")
 
     # IP MATCH
-    if session.get("ip") != request.remote_addr:
+    if session.get("ip") != get_ip().split(",")[0].strip():
         session.clear()
         return redirect("/")
 
@@ -328,6 +382,9 @@ def dashboard():
 
         users = None
 
+    username = session.get("user", "User")
+    camera_status = "LIVE"
+
     cur.close()
     conn.close()
 
@@ -335,7 +392,9 @@ def dashboard():
         "dashboard.html",
         logs=logs,
         total_logs=total_logs,
-        users=users
+        users=users,
+        username = username,
+        camera_status=camera_status
     )
 
 @app.route("/admin/dashboard")
@@ -490,6 +549,14 @@ def approve(user_id):
     if session.get("role") != "Admin":
         return "Access Denied"
 
+    if session["user_id"] == user_id:
+        flash(
+            "You cannot approve your own account.",
+            "warning"
+        )
+
+        return redirect("/admin")
+
     conn = get_conn()
     cur = conn.cursor()
 
@@ -502,12 +569,14 @@ def approve(user_id):
     cur.execute("""
         INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
         VALUES (%s, %s, %s, %s)
-    """, (user_id, "ACCOUNT APPROVED", request.remote_addr, "ADMIN"))
+    """, (user_id, "ACCOUNT APPROVED", get_ip(), "ADMIN"))
 
     conn.commit()
 
     cur.close()
     conn.close()
+
+    flash("User approved successfully", "success")
 
     return redirect("/admin")
 
@@ -517,6 +586,14 @@ def block(user_id):
 
     if session.get("role") != "Admin":
         return "Access Denied"
+
+    if session["user_id"] == user_id:
+        flash(
+            "You cannot block your own account.",
+            "warning"
+        )
+
+        return redirect("/admin")
 
     conn = get_conn()
     cur = conn.cursor()
@@ -530,12 +607,14 @@ def block(user_id):
     cur.execute("""
         INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
         VALUES (%s, %s, %s, %s)
-    """, (user_id, "ACCOUNT BLOCKED BY ADMIN", request.remote_addr, "ADMIN"))
+    """, (user_id, "ACCOUNT BLOCKED BY ADMIN", get_ip(), "ADMIN"))
 
     conn.commit()
 
     cur.close()
     conn.close()
+
+    flash("User blocked", "danger")
 
     return redirect("/admin")
 
@@ -546,6 +625,13 @@ def unlock(user_id):
     if session.get("role") != "Admin":
         return "Access Denied"
 
+    if session["user_id"] == user_id:
+        flash(
+            "You cannot unlock your own account.",
+            "warning"
+        )
+
+        return redirect("/admin")
     conn = get_conn()
     cur = conn.cursor()
 
@@ -559,12 +645,14 @@ def unlock(user_id):
     cur.execute("""
         INSERT INTO ActivityLogs(user_id, action_description, ip_address, log_type)
         VALUES (%s, %s, %s, %s)
-    """, (user_id, "ACCOUNT UNLOCKED BY ADMIN", request.remote_addr, "ADMIN"))
+    """, (user_id, "ACCOUNT UNLOCKED BY ADMIN", get_ip(), "ADMIN"))
 
     conn.commit()
 
     cur.close()
     conn.close()
+
+    flash("User unlocked", "success")
 
     return redirect("/admin")
 
@@ -576,6 +664,15 @@ def video_feed():
         generate_frames(),
         mimetype='multipart/x-mixed-replace; boundary=frame'
     )
+
+@app.after_request
+def add_headers(response):
+
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    return response
 
 # RUN APP
 if __name__ == "__main__":

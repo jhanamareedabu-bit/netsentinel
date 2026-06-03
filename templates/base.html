@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html>
-
 <head>
     <title>NetSentinel</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
@@ -29,6 +28,33 @@
     </div>
 
 </div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script>
+function showToast(message, category) {
+    const toast = document.createElement("div");
+    toast.className = "toast " + category;
+    toast.innerText = message;
+
+    document.getElementById("toast-container").appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+</script>
+
+<script>
+const messages = JSON.parse('{{ get_flashed_messages(with_categories=true) | tojson | safe }}');
+
+if (messages) {
+    messages.forEach(function(item) {
+        showToast(item[1], item[0]);
+    });
+}
+</script>
 
 </body>
 </html>
